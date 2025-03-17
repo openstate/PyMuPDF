@@ -7120,7 +7120,7 @@ class Widget:
            ):
             raise ValueError("bad rect")
 
-        if not self.field_name:
+        if self.field_name is None:
             raise ValueError("field name missing")
 
         if self.field_label == "Unnamed":
