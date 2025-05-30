@@ -96,6 +96,7 @@ For details on **embedded files** refer to Appendix 3.
 :meth:`Document.pdf_catalog`            PDF only: :data:`xref` of catalog (root)
 :meth:`Document.pdf_trailer`            PDF only: trailer source
 :meth:`Document.prev_location`          return (chapter, pno) of preceding page
+:meth:`Document.recolor`                PDF only: execute :meth:`Page.recolor` for all pages
 :meth:`Document.reload_page`            PDF only: provide a new copy of a page
 :meth:`Document.resolve_names`          PDF only: Convert destination names into a Python dict
 :meth:`Document.save`                   PDF only: save the document
@@ -169,28 +170,29 @@ For details on **embedded files** refer to Appendix 3.
 
   .. method:: __init__(self, filename=None, stream=None, *, filetype=None, rect=None, width=0, height=0, fontsize=11)
 
-    * Changed in v1.14.13: support `io.BytesIO` for memory documents.
-    * Changed in v1.19.6: Clearer, shorter and more consistent exception messages. File type "pdf" is always assumed if not specified. Empty files and memory areas will always lead to exceptions.
-
-    Creates a *Document* object.
+    Create a ``Document`` object.
 
     * With default parameters, a **new empty PDF** document will be created.
-    * If *stream* is given, then the document is created from memory and, if not a PDF, either *filename* or *filetype* must indicate its type.
-    * If *stream* is `None`, then a document is created from the file given by *filename*. Its type is inferred from the extension. This can be overruled by *filetype.*
+    * If ``stream`` is given, then the document is created from memory.
+    * If ``stream`` is `None`, then a document is created from the file given by ``filename``. 
 
-    :arg str,pathlib filename: A UTF-8 string or *pathlib* object containing a file path. The document type is inferred from the filename extension. If not present or not matching :ref:`a supported type<Supported_File_Types>`, a PDF document is assumed. For memory documents, this argument may be used instead of `filetype`, see below.
+    :arg str,pathlib filename: A UTF-8 string or ``pathlib.Path`` object containing a file path. The document type is always determined from the file content. The ``filetype`` parameter can be used to ensure that the detected type is as expected or, respectively, to force treating any file as plain text.
 
-    :arg bytes,bytearray,BytesIO stream: A memory area containing a supported document. If not a PDF, its type **must** be specified by either `filename` or `filetype`.
+    :arg bytes,bytearray,BytesIO stream: A memory area containing file data. The document type is **always** detected from the data content. The ``filetype`` parameter is ignored except for undetected data content. In that case only, using ``filetype="txt"`` will treat the data as containing plain text.
 
-    :arg str filetype: A string specifying the type of document. This may be anything looking like a filename (e.g. "x.pdf"), in which case MuPDF uses the extension to determine the type, or a mime type like *application/pdf*. Just using strings like "pdf"  or ".pdf" will also work. May be omitted for PDF documents, otherwise must match :ref:`a supported document type<Supported_File_Types>`.
+    :arg str filetype: A string specifying the type of document. This may be anything looking like a filename (e.g. "x.pdf"), in which case MuPDF uses the extension to determine the type, or a mime type like ``application/pdf``. Just using strings like "pdf"  or ".pdf" will also work. Can be omitted for :ref:`a supported document type<Supported_File_Types>`.
+    
+      If opening a file name / path only, it will be used to ensure that the detected type is as expected. An exception is raised for a mismatch. Using `filetype="txt"` will treat any file as containing plain text.
+      
+      When opening from memory, this parameter is ignored except for undetected data content. Only in that case, using ``filetype="txt"`` will treat the data as containing plain text.
 
     :arg rect_like rect: a rectangle specifying the desired page size. This parameter is only meaningful for documents with a variable page layout ("reflowable" documents), like e-books or HTML, and ignored otherwise. If specified, it must be a non-empty, finite rectangle with top-left coordinates (0, 0). Together with parameter *fontsize*, each page will be accordingly laid out and hence also determine the number of pages.
 
-    :arg float width: may used together with *height* as an alternative to *rect* to specify layout information.
+    :arg float width: may used together with ``height`` as an alternative to ``rect`` to specify layout information.
 
-    :arg float height: may used together with *width* as an alternative to *rect* to specify layout information.
+    :arg float height: may used together with ``width`` as an alternative to ``rect`` to specify layout information.
 
-    :arg float fontsize: the default :data:`fontsize` for reflowable document types. This parameter is ignored if none of the parameters *rect* or *width* and *height* are specified. Will be used to calculate the page layout.
+    :arg float fontsize: the default :data:`fontsize` for reflowable document types. This parameter is ignored if none of the parameters ``rect`` or ``width`` and ``height`` are specified. Will be used to calculate the page layout.
 
     :raises TypeError: if the *type* of any parameter does not conform.
     :raises FileNotFoundError: if the file / path cannot be found. Re-implemented as subclass of `RuntimeError`.
@@ -202,31 +204,26 @@ For details on **embedded files** refer to Appendix 3.
 
       In case of problems you can see more detail in the internal messages store: `print(pymupdf.TOOLS.mupdf_warnings())` (which will be emptied by this call, but you can also prevent this -- consult :meth:`Tools.mupdf_warnings`).
 
-    .. note:: Not all document types are checked for valid formats already at open time. Raster images for example will raise exceptions only later, when trying to access the content. Other types (notably with non-binary content) may also be opened (and sometimes **accessed**) successfully -- sometimes even when having invalid content for the format:
-
-      * HTM, HTML, XHTML: **always** opened, `metadata["format"]` is "HTML5", resp. "XHTML".
-      * XML, FB2: **always** opened, `metadata["format"]` is "FictionBook2".
-
     Overview of possible forms, note: `open` is a synonym of `Document`::
 
         >>> # from a file
         >>> doc = pymupdf.open("some.xps")
         >>> # handle wrong extension
-        >>> doc = pymupdf.open("some.file", filetype="xps")
+        >>> doc = pymupdf.open("some.file", filetype="xps")  # assert expected type
+        >>> doc = pymupdf.open("some.file", filetype="txt")  # treat as plain text
         >>>
-        >>> # from memory, filetype is required if not a PDF
-        >>> doc = pymupdf.open("xps", mem_area)
-        >>> doc = pymupdf.open(None, mem_area, "xps")
-        >>> doc = pymupdf.open(stream=mem_area, filetype="xps")
+        >>> # from memory
+        >>> doc = pymupdf.open(stream=mem_area)  # works for any supported type
+        >>> doc = pymupdf.open(stream=unknown-type, filetype="txt")  # treat as plain text
         >>>
         >>> # new empty PDF
         >>> doc = pymupdf.open()
         >>> doc = pymupdf.open(None)
         >>> doc = pymupdf.open("")
 
-    .. note:: Raster images with a wrong (but supported) file extension **are no problem**. MuPDF will determine the correct image type when file **content** is actually accessed and will process it without complaint. So `pymupdf.open("file.jpg")` will work even for a PNG image.
+    .. note:: Raster images with a wrong (but supported) file extension **are no problem**. MuPDF will determine the correct image type when file **content** is actually accessed and will process it without complaint.
 
-    The Document class can be also be used as a **context manager**. On exit, the document will automatically be closed.
+    The Document class can be also be used as a **context manager**. Exiting the content manager will close the document automatically.
 
         >>> import pymupdf
         >>> with pymupdf.open(...) as doc:
@@ -254,7 +251,7 @@ For details on **embedded files** refer to Appendix 3.
 
     * New in v1.18.4
 
-    If *xref* represents an image or form xobject, set or remove the cross reference number *ocxref* of an optional contents object.
+    If :data:`xref` represents an image or form xobject, set or remove the cross reference number *ocxref* of an optional contents object.
 
     :arg int xref: the :data:`xref` of an image or form xobject [#f5]_. Valid such cross reference numbers are returned by :meth:`Document.get_page_images`, resp. :meth:`Document.get_page_xobjects`. For invalid numbers, an exception is raised.
     :arg int ocxref: the :data:`xref` number of an :data:`OCG` / :data:`OCMD`. If not zero, an invalid reference raises an exception. If zero, any OC reference is removed.
@@ -290,7 +287,7 @@ For details on **embedded files** refer to Appendix 3.
     :arg int number: config number as returned by :meth:`Document.layer_configs`.
     :arg bool as_default: make this the default configuration.
 
-    Activates the ON / OFF states of OCGs as defined in the identified layer. If *as_default=True*, then additionally all layers, including the standard one, are merged and the result is written back to the standard layer, and **all optional layers are deleted**.
+    Activates the ON / OFF states of OCGs as defined in the identified layer. If ``as_default=True``, then additionally all layers, including the standard one, are merged and the result is written back to the standard layer, and **all optional layers are deleted**.
 
 
   .. method:: add_ocg(name, config=-1, on=True, intent="View", usage="Artwork")
@@ -364,7 +361,7 @@ For details on **embedded files** refer to Appendix 3.
 
     :arg int xref: the :data:`xref` of the OCMD.
     :rtype: dict
-    :returns: a dictionary with the keys *xref*, *ocgs*, *policy* and *ve*.
+    :returns: a dictionary with the keys :data:`xref`, *ocgs*, *policy* and *ve*.
 
 
   .. method:: get_layer(config=-1)
@@ -456,7 +453,7 @@ For details on **embedded files** refer to Appendix 3.
     :arg str password: owner or user password.
 
     :rtype: int
-    :returns: a positive value if successful, zero otherwise (the string does not match either password). If positive, the indicator :attr:`Document.is_encrypted` is set to *False*. **Positive** return codes carry the following information detail:
+    :returns: a positive value if successful, zero otherwise (the string does not match either password). If positive, the indicator :attr:`Document.is_encrypted` is set to ``False``. **Positive** return codes carry the following information detail:
 
       * 1 => authenticated, but the PDF has neither owner nor user passwords.
       * 2 => authenticated with the **user** password.
@@ -593,6 +590,16 @@ For details on **embedded files** refer to Appendix 3.
      You can also use index notation with the new chapter-based page identification: use *page = doc[(5, 2)]* to load the third page of the sixth chapter.
 
      To maintain a consistent API, for document types not supporting a chapter structure (like PDFs), :attr:`Document.chapter_count` is 1, and pages can also be loaded via tuples *(0, pno)*. See this [#f3]_ footnote for comments on performance improvements.
+
+
+  .. method:: recolor(components=1)
+
+    PDF only: Change the color component counts for all object types text, image and vector graphics for all pages.
+
+    :arg int components: desired color space indicated by the number of color components: 1 = DeviceGRAY, 3 = DeviceRGB, 4 = DeviceCMYK.
+
+    The typical use case is 1 (DeviceGRAY) which converts the PDF to grayscale.
+
 
   .. method:: reload_page(page)
 
@@ -737,7 +744,7 @@ For details on **embedded files** refer to Appendix 3.
 
     Creates a table of contents (TOC) out of the document's outline chain.
 
-    :arg bool simple: Indicates whether a simple or a detailed TOC is required. If *False*, each item of the list also contains a dictionary with :ref:`linkDest` details for each outline entry.
+    :arg bool simple: Indicates whether a simple or a detailed TOC is required. If ``False``, each item of the list also contains a dictionary with :ref:`linkDest` details for each outline entry.
 
     :rtype: list
 
@@ -842,7 +849,7 @@ For details on **embedded files** refer to Appendix 3.
     :arg str key: the desired PDF key (without leading "/"). Must not be empty. Any valid PDF key -- whether already present in the object (which will be overwritten) -- or new. It is possible to use PDF path notation like `"Resources/ExtGState"` -- which sets the value for key `"/ExtGState"` as a sub-object of `"/Resources"`.
     :arg str value: the value for the key. It must be a non-empty string and, depending on the desired PDF object type, the following rules must be observed. There is some syntax checking, but **no type checking** and no checking if it makes sense PDF-wise, i.e. **no semantics checking**. Upper / lower case is important!
 
-    * **xref** -- must be provided as `"nnn 0 R"` with a valid :data:`xref` number nnn of the PDF. The suffix "`0 R`" is required to be recognizable as an xref by PDF applications.
+    * *:data:`xref`* -- must be provided as `"nnn 0 R"` with a valid :data:`xref` number nnn of the PDF. The suffix "`0 R`" is required to be recognizable as an xref by PDF applications.
     * **array** -- a string like `"[a b c d e f]"`. The brackets are required. Array items must be separated by at least one space (not commas like in Python). An empty array `"[]"` is possible and *equivalent* to removing the key. Array items may be any PDF objects, like dictionaries, xrefs, other arrays, etc. Like in Python, array items may be of different types.
     * **dict** -- a string like `"<< ... >>"`. The brackets are required and must enclose a valid PDF dictionary definition. The empty dictionary `"<<>>"` is possible and *equivalent* to removing the key.
     * **int** -- an integer formatted **as a string**.
@@ -887,7 +894,7 @@ For details on **embedded files** refer to Appendix 3.
     :rtype: list
     :returns: a list of (non-image) XObjects. These objects typically represent pages *embedded* (not copied) from other PDFs. For example, :meth:`Page.show_pdf_page` will create this type of object. An item of this list has the following layout: `(xref, name, invoker, bbox)`, where
 
-      * **xref** (*int*) is the XObject's :data:`xref`.
+      * *:data:`xref`* (*int*) is the XObject's :data:`xref`.
       * **name** (*str*) is the symbolic name to reference the XObject.
       * **invoker** (*int*) the :data:`xref` of the invoking XObject or zero if the page directly invokes it.
       * **bbox** (:ref:`Rect`) the boundary box of the XObject's location on the page **in untransformed coordinates**. To get actual, non-rotated page coordinates, multiply with the page's transformation matrix :attr:`Page.transformation_matrix`. *Changed in v.18.11:* the bbox is now formatted as :ref:`Rect`.
@@ -902,48 +909,44 @@ For details on **embedded files** refer to Appendix 3.
 
     :rtype: list
 
-    :returns: a list of images **referenced** by this page. Each item looks like
+    :returns: a list of images **referenced** by this page. Each item looks like:
 
         `(xref, smask, width, height, bpc, colorspace, alt_colorspace, name, filter, referencer)`
 
-        Where
-
-          * **xref** (*int*) is the image object number
-          * **smask** (*int*) is the object number of its soft-mask image
-          * **width** (*int*) is the image width
-          * **height** (*int*) is the image height
-          * **bpc** (*int*) denotes the number of bits per component (normally 8)
-          * **colorspace** (*str*) a string naming the colorspace (like **DeviceRGB**)
-          * **alt_colorspace** (*str*) is any alternate colorspace depending on the value of **colorspace**
-          * **name** (*str*) is the symbolic name by which the image is referenced
-          * **filter** (*str*) is the decode filter of the image (:ref:`AdobeManual`, pp. 22).
-          * **referencer** (*int*) the :data:`xref` of the referencer. Zero if directly referenced by the page. Only present if *full=True*.
+          * ``xref`` (*int*) is the image object number
+          * ``smask`` (*int*) is the object number of its soft-mask image
+          * ``width`` (*int*) is the image width
+          * ``height`` (*int*) is the image height
+          * ``bpc`` (*int*) denotes the number of bits per component (normally 8)
+          * ``colorspace`` (*str*) a string naming the colorspace (like **DeviceRGB**)
+          * ``alt_colorspace`` (*str*) is any alternate colorspace depending on the value of **colorspace**
+          * ``name`` (*str*) is the symbolic name by which the image is referenced
+          * ``filter`` (*str*) is the decode filter of the image (:ref:`AdobeManual`, pp. 22).
+          * ``referencer`` (*int*) the :data:`xref` of the referencer. Zero if directly referenced by the page. Only present if *full=True*.
 
     .. note:: In general, this is not the list of images that are **actually displayed**. This method only parses several PDF objects to collect references to embedded images. It does not analyse the page's :data:`contents`, where all the actual image display commands are defined. To get this information, please use :meth:`Page.get_image_info`. Also have a look at the discussion in section :ref:`textpagedict`.
 
 
   .. method:: get_page_fonts(pno, full=False)
 
-    PDF only: Return a list of all fonts (directly or indirectly) referenced by the page.
+    PDF only: Return a list of all fonts (directly or indirectly) referenced by the page object definition.
 
     :arg int pno: page number, 0-based, `-∞ < pno < page_count`.
-    :arg bool full: whether to also include the referencer's :data:`xref`. If *True*, the returned items are one entry longer. Use this option if you need to know, whether the page directly references the font. In this case the last entry is 0. If the font is referenced by an `/XObject` of the page, you will find its :data:`xref` here.
+    :arg bool full: whether to also include the referencer's :data:`xref`. If ``True``, the returned items are one entry longer. Use this option if you need to know, whether the page directly references the font. In this case the last entry is 0. If the font is referenced by an `/XObject` of the page, you will find its :data:`xref` here.
 
     :rtype: list
 
-    :returns: a list of fonts referenced by this page. Each entry looks like
+    :returns: a list of fonts referenced by the object definition of the page. Each entry looks like:
 
-    **(xref, ext, type, basefont, name, encoding, referencer)**,
+      `(xref, ext, type, basefont, name, encoding, referencer)`
 
-    where
-
-        * **xref** (*int*) is the font object number (may be zero if the PDF uses one of the builtin fonts directly)
-        * **ext** (*str*) font file extension (e.g. "ttf", see :ref:`FontExtensions`)
-        * **type** (*str*) is the font type (like "Type1" or "TrueType" etc.)
-        * **basefont** (*str*) is the base font name,
-        * **name** (*str*) is the symbolic name, by which the font is referenced
-        * **encoding** (*str*) the font's character encoding if different from its built-in encoding (:ref:`AdobeManual`, p. 254):
-        * **referencer** (*int* optional) the :data:`xref` of the referencer. Zero if directly referenced by the page, otherwise the xref of an XObject. Only present if *full=True*.
+          * ``xref`` (*int*) is the font object number (may be zero if the PDF uses one of the builtin fonts directly)
+          * ``ext`` (*str*) font file extension (e.g. "ttf", see :ref:`FontExtensions`)
+          * ``type`` (*str*) is the font type (like "Type1" or "TrueType" etc.)
+          * ``basefont`` (*str*) is the base font name,
+          * ``name`` (*str*) is the symbolic name, by which the font is referenced
+          * ``encoding`` (*str*) the font's character encoding if different from its built-in encoding (:ref:`AdobeManual`, p. 254):
+          * ``referencer`` (*int* optional) the :data:`xref` of the referencer. Zero if directly referenced by the page, otherwise the xref of an XObject. Only present if *full=True*.
 
     Example::
 
@@ -959,7 +962,12 @@ For details on **embedded files** refer to Appendix 3.
 
     .. note::
         * This list has no duplicate entries: the combination of :data:`xref`, *name* and *referencer* is unique.
-        * In general, this is a superset of the fonts actually in use by this page. The PDF creator may e.g. have specified some global list, of which each page only makes partial use.
+        * In general, this is a true superset of the fonts actually in use by this page. The PDF creator may e.g. have specified some global list, of which each page make only partial use.
+        * Be aware that font names returned by some variants of :meth:`Page.get_text` (respectively :ref:`TextPage` methods) need not (exactly) equal the base font name shown here. Reasons for any differences include:
+
+           - This method always shows any subset prefixes (the pattern ``ABCDEF+``), whereas text extractions do not do this by default.
+           - Text extractions use the base library to access the font name, which has a length cap of 31 bytes and generally interrogates the font file binary to access the name. Method ``get_page_fonts()`` however looks at the PDF definition source.
+           - Text extractions work for all supported document types in exactly the same way -- not just for PDFs. Consequently they do not contain PDF-specifics.
 
   .. method:: get_page_text(pno, output="text", flags=3, textpage=None, sort=False)
 
@@ -979,11 +987,11 @@ For details on **embedded files** refer to Appendix 3.
 
   .. method:: layout(rect=None, width=0, height=0, fontsize=11)
 
-    Re-paginate ("reflow") the document based on the given page dimension and fontsize. This only affects some document types like e-books and HTML. Ignored if not supported. Supported documents have *True* in property :attr:`is_reflowable`.
+    Re-paginate ("reflow") the document based on the given page dimension and fontsize. This only affects some document types like e-books and HTML. Ignored if not supported. Supported documents have ``True`` in property :attr:`is_reflowable`.
 
     :arg rect_like rect: desired page size. Must be finite, not empty and start at point (0, 0).
-    :arg float width: use it together with *height* as alternative to *rect*.
-    :arg float height: use it together with *width* as alternative to *rect*.
+    :arg float width: use it together with ``height`` as alternative to ``rect``.
+    :arg float height: use it together with ``width`` as alternative to ``rect``.
     :arg float fontsize: the desired default fontsize.
 
   .. method:: select(s)
@@ -1175,7 +1183,7 @@ For details on **embedded files** refer to Appendix 3.
     PDF only: Remove potentially sensitive data from the PDF. This function is inspired by the similar "Sanitize" function in Adobe Acrobat products. The process is configurable by a number of options.
 
     :arg bool attached_files: Search for 'FileAttachment' annotations and remove the file content.
-    :arg bool clean_pages: Remove any comments from page painting sources. If this option is set to *False*, then this is also done for *hidden_text* and *redactions*.
+    :arg bool clean_pages: Remove any comments from page painting sources. If this option is set to ``False``, then this is also done for *hidden_text* and *redactions*.
     :arg bool embedded_files: Remove embedded files.
     :arg bool hidden_text: Remove OCRed text and invisible text [#f7]_.
     :arg bool javascript: Remove JavaScript sources.
@@ -1259,7 +1267,7 @@ For details on **embedded files** refer to Appendix 3.
 
   .. method:: saveIncr()
 
-    PDF only: saves the document incrementally. This is a convenience abbreviation for *doc.save(doc.name, incremental=True, encryption=PDF_ENCRYPT_KEEP)*.
+    PDF only: saves the document incrementally. This is a convenience abbreviation for ``doc.save(doc.name, incremental=True, encryption=PDF_ENCRYPT_KEEP)``.
 
   .. note::
 
@@ -1297,7 +1305,7 @@ For details on **embedded files** refer to Appendix 3.
      pair: join_duplicates; Document.insert_pdf
      pair: show_progress; Document.insert_pdf
 
-  .. method:: insert_pdf(docsrc, from_page=-1, to_page=-1, start_at=-1, rotate=-1, links=True, annots=True, widgets=True, join_duplicates=False, show_progress=0, final=1)
+  .. method:: insert_pdf(docsrc, *, from_page=-1, to_page=-1, start_at=-1, rotate=-1, links=True, annots=True, widgets=True, join_duplicates=False, show_progress=0, final=1)
 
     PDF only: Copy the page range **[from_page, to_page]** (including both) of PDF document *docsrc* into the current one. Inserts will start with page number *start_at*. Value -1 indicates default values. All pages thus copied will be rotated as specified. Links, annotations and widgets can be excluded in the target, see below. All page numbers are 0-based.
 
@@ -1326,7 +1334,7 @@ For details on **embedded files** refer to Appendix 3.
     
     :arg int show_progress: *(new in v1.17.7)* specify an interval size greater zero to see progress messages on `sys.stdout`. After each interval, a message like `Inserted 30 of 47 pages.` will be printed.
     
-    :arg int final: *(new in v1.18.0)* controls whether the list of already copied objects should be **dropped** after this method, default *True*. Set it to 0 except for the last one of multiple insertions from the same source PDF. This saves target file size and speeds up execution considerably.
+    :arg int final: *(new in v1.18.0)* controls whether the list of already copied objects should be **dropped** after this method, default ``True``. Set it to 0 except for the last one of multiple insertions from the same source PDF. This saves target file size and speeds up execution considerably.
 
   .. note::
 
@@ -1366,13 +1374,13 @@ For details on **embedded files** refer to Appendix 3.
 
     PDF only: Insert an empty page.
 
-    :arg int pno: page number in front of which the new page should be inserted. Must be in *1 < pno <= page_count*. Special values -1 and *doc.page_count* insert **after** the last page.
+    :arg int pno: page number in front of which the new page should be inserted. Must be in `1 < pno <= page_count`. Special values -1 and *doc.page_count* insert **after** the last page.
 
     :arg float width: page width.
     :arg float height: page height.
 
     :rtype: :ref:`Page`
-    :returns: the created page object.
+    :returns: the created page object. Be aware that the page numbers of pages after the inserted one will have changed after method execution. For the same reason, **all existing page objects will be invalidated.** Using them will lead to exceptions.
 
   .. index::
      pair: fontsize; Document.insert_page
@@ -1633,7 +1641,7 @@ For details on **embedded files** refer to Appendix 3.
 
     * New in v1.16.8
 
-    PDF only: Return the trailer source of the PDF,  which is usually located at the PDF file's end. This is :meth:`Document.xref_object` with an *xref* argument of -1.
+    PDF only: Return the trailer source of the PDF,  which is usually located at the PDF file's end. This is :meth:`Document.xref_object` with an :data:`xref` argument of -1.
 
 
   .. method:: xref_stream(xref)
@@ -1679,7 +1687,7 @@ For details on **embedded files** refer to Appendix 3.
     * Changed in v1.19.2: added parameter "compress"
     * Changed in v1.19.6: deprecated parameter "new". Now confirms that the object is a PDF dictionary object.
 
-    Replace the stream of an object identified by *xref*, which must be a PDF dictionary. If the object is no :data:`stream`, it will be turned into one. The function automatically performs a compress operation ("deflate") where beneficial.
+    Replace the stream of an object identified by :data:`xref`, which must be a PDF dictionary. If the object is no :data:`stream`, it will be turned into one. The function automatically performs a compress operation ("deflate") where beneficial.
 
     :arg int xref: :data:`xref` number.
 
@@ -1690,7 +1698,7 @@ For details on **embedded files** refer to Appendix 3.
     :arg bool new: *deprecated* and ignored. Will be removed some time after v1.20.0.
     :arg bool compress: whether to compress the inserted stream. If `True` (default), the stream will be inserted using `/FlateDecode` compression (if beneficial), otherwise the stream will inserted as is.
 
-    :raises ValueError: if *xref* does not represent a PDF :data:`dict`. An empty dictionary ``<<>>`` is accepted. So if you just created the xref and want to give it a stream, first execute `doc.update_object(xref, "<<>>")`, and then insert the stream data with this method.
+    :raises ValueError: if :data:`xref` does not represent a PDF :data:`dict`. An empty dictionary ``<<>>`` is accepted. So if you just created the xref and want to give it a stream, first execute `doc.update_object(xref, "<<>>")`, and then insert the stream data with this method.
 
     The method is primarily (but not exclusively) intended to manipulate streams containing PDF operator syntax (see pp. 643 of the :ref:`AdobeManual`) as it is the case for e.g. page content streams.
 
@@ -1703,19 +1711,19 @@ For details on **embedded files** refer to Appendix 3.
 
     * New in v1.19.5
 
-    PDF Only: Make *target* xref an exact copy of *source*. If *source* is a :data:`stream`, then these data are also copied.
+    PDF Only: Make ``target`` xref an exact copy of ``source``. If ``source`` is a :data:`stream`, then this data is also copied.
 
     :arg int source: the source :data:`xref`. It must be an existing **dictionary** object.
     :arg int target: the target xref. Must be an existing **dictionary** object. If the xref has just been created, make sure to initialize it as a PDF dictionary with the minimum specification ``<<>>``.
-    :arg list keep: an optional list of top-level keys in *target*, that should not be removed in preparation of the copy process.
+    :arg list keep: an optional list of top-level keys in ``target``, that should not be removed in preparation of the copy process.
 
     .. note::
 
         * This method has much in common with Python's *dict* method `copy()`.
         * Both xref numbers must represent existing dictionaries.
-        * Before data is copied from *source*, all *target* dictionary keys are deleted. You can specify exceptions from this in the *keep* list. If *source* however has a same-named key, its value will still replace the target.
-        * If *source* is a :data:`stream` object, then these data will also be copied over, and *target* will be converted to a stream object.
-        * A typical use case is to replace or remove an existing image without using redaction annotations. Example scripts can be seen `here <https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/examples/replace-image>`_.
+        * Before data is copied from *source*, all *target* dictionary keys are deleted. You can specify exceptions from this in the ``keep`` list. If *source* however has a same-named key, its value will still replace the target.
+        * If ``source`` is a :data:`stream` object, then these data will also be copied over, and ``target`` will be converted to a stream object.
+        * A typical use case is to replace or remove an existing image without using redaction annotations. Example scripts can be seen `in this PyMuPDF Utilities example <https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/examples/replace-image>`_.
 
   .. method:: Document.extract_image(xref)
 
@@ -1728,8 +1736,8 @@ For details on **embedded files** refer to Appendix 3.
 
       * *ext* (*str*) image type (e.g. *'jpeg'*), usable as image file extension
       * *smask* (*int*) :data:`xref` number of a stencil (/SMask) image or zero
-      * *width* (*int*) image width
-      * *height* (*int*) image height
+      * ``width`` (*int*) image width
+      * ``height`` (*int*) image height
       * *colorspace* (*int*) the image's *colorspace.n* number.
       * *cs-name* (*str*) the image's *colorspace.name*.
       * *xres* (*int*) resolution in x direction. Please also see :data:`resolution`.
@@ -1820,7 +1828,7 @@ For details on **embedded files** refer to Appendix 3.
 
     PDF only: Check whether there are links, resp. annotations anywhere in the document.
 
-    :returns: *True* / *False*. As opposed to fields, which are also stored in a central place of a PDF document, the existence of links / annotations can only be detected by parsing each page. These methods are tuned to do this efficiently and will immediately return, if the answer is *True* for a page. For PDFs with many thousand pages however, an answer may take some time [#f6]_ if no link, resp. no annotation is found.
+    :returns: ``True`` / ``False``. As opposed to fields, which are also stored in a central place of a PDF document, the existence of links / annotations can only be detected by parsing each page. These methods are tuned to do this efficiently and will immediately return, if the answer is ``True`` for a page. For PDFs with many thousand pages however, an answer may take some time [#f6]_ if no link, resp. no annotation is found.
 
 
   .. method:: subset_fonts(verbose=False, fallback=False)
@@ -1941,25 +1949,25 @@ For details on **embedded files** refer to Appendix 3.
 
   .. attribute:: is_closed
 
-    *False* if document is still open. If closed, most other attributes and methods will have been deleted / disabled. In addition, :ref:`Page` objects referring to this document (i.e. created with :meth:`Document.load_page`) and their dependent objects will no longer be usable. For reference purposes, :attr:`Document.name` still exists and will contain the filename of the original document (if applicable).
+    ``False`` if document is still open. If closed, most other attributes and methods will have been deleted / disabled. In addition, :ref:`Page` objects referring to this document (i.e. created with :meth:`Document.load_page`) and their dependent objects will no longer be usable. For reference purposes, :attr:`Document.name` still exists and will contain the filename of the original document (if applicable).
 
     :type: bool
 
   .. attribute:: is_dirty
 
-    *True* if this is a PDF document and contains unsaved changes, else *False*.
+    ``True`` if this is a PDF document and contains unsaved changes, else ``False``.
 
     :type: bool
 
   .. attribute:: is_pdf
 
-    *True* if this is a PDF document, else *False*.
+    ``True`` if this is a PDF document, else ``False``.
 
     :type: bool
 
   .. attribute:: is_form_pdf
 
-    *False* if this is not a PDF or has no form fields, otherwise the number of root form fields (fields with no ancestors).
+    ``False`` if this is not a PDF or has no form fields, otherwise the number of root form fields (fields with no ancestors).
 
     *(Changed in v1.16.4)* Returns the total number of (root) form fields.
 
@@ -1967,7 +1975,7 @@ For details on **embedded files** refer to Appendix 3.
 
   .. attribute:: is_reflowable
 
-    *True* if document has a variable page layout (like e-books or HTML). In this case you can set the desired page dimensions during document creation (open) or via method :meth:`layout`.
+    ``True`` if document has a variable page layout (like e-books or HTML). In this case you can set the desired page dimensions during document creation (open) or via method :meth:`layout`.
 
     :type: bool
 
@@ -1975,7 +1983,7 @@ For details on **embedded files** refer to Appendix 3.
 
     * New in v1.18.2
 
-    *True* if PDF has been repaired during open (because of major structure issues). Always *False* for non-PDF documents. If true, more details have been stored in `TOOLS.mupdf_warnings()`, and :meth:`Document.can_save_incrementally` will return *False*.
+    ``True`` if PDF has been repaired during open (because of major structure issues). Always ``False`` for non-PDF documents. If true, more details have been stored in `TOOLS.mupdf_warnings()`, and :meth:`Document.can_save_incrementally` will return ``False``.
 
     :type: bool
 
@@ -1983,7 +1991,7 @@ For details on **embedded files** refer to Appendix 3.
 
     * New in v1.22.2
 
-    *True* if PDF is in linearized format. *False* for non-PDF documents.
+    ``True`` if PDF is in linearized format. ``False`` for non-PDF documents.
 
     :type: bool
 
@@ -2027,7 +2035,7 @@ For details on **embedded files** refer to Appendix 3.
 
   .. attribute:: is_encrypted
 
-    This indicator initially equals :attr:`Document.needs_pass`. After successful authentication, it is set to *False* to reflect the situation.
+    This indicator initially equals :attr:`Document.needs_pass`. After successful authentication, it is set to ``False`` to reflect the situation.
 
     :type: bool
 
@@ -2195,7 +2203,7 @@ Other Examples
 
 .. [#f5] Examples for "Form XObjects" are created by :meth:`Page.show_pdf_page`.
 
-.. [#f6] For a *False* the **complete document** must be scanned. Both methods **do not load pages,** but only scan object definitions. This makes them at least 10 times faster than application-level loops (where total response time roughly equals the time for loading all pages). For the :ref:`AdobeManual` (756 pages) and the Pandas documentation (over 3070 pages) -- both have no annotations -- the method needs about 11 ms for the answer *False*. So response times will probably become significant only well beyond this order of magnitude.
+.. [#f6] For a ``False`` the **complete document** must be scanned. Both methods **do not load pages,** but only scan object definitions. This makes them at least 10 times faster than application-level loops (where total response time roughly equals the time for loading all pages). For the :ref:`AdobeManual` (756 pages) and the Pandas documentation (over 3070 pages) -- both have no annotations -- the method needs about 11 ms for the answer ``False``. So response times will probably become significant only well beyond this order of magnitude.
 
 .. [#f7] This only works under certain conditions. For example, if there is normal text covered by some image on top of it, then this is undetectable and the respective text is **not** removed. Similar is true for white text on white background, and so on.
 

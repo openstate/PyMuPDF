@@ -106,6 +106,7 @@ In a nutshell, this is what you can do with PyMuPDF:
 :meth:`Page.load_widget`           PDF only: load a specific field
 :meth:`Page.load_links`            return the first link on a page
 :meth:`Page.new_shape`             PDF only: create a new :ref:`Shape`
+:meth:`Page.recolor`               PDF only: change the colorspace of objects
 :meth:`Page.remove_rotation`       PDF only: set page rotation to 0
 :meth:`Page.replace_image`         PDF only: replace an image
 :meth:`Page.search_for`            search for a string
@@ -215,9 +216,9 @@ In a nutshell, this is what you can do with PyMuPDF:
 
       :arg list,tuple,float fill_color: the fill color. This is used for ``rect`` and the end point of the callout lines when applicable. Default is ``None``.
 
-      :arg list,tuple,float border_color:  This parameter only has an effect if `richtext=True`. Otherwise, ``text_color`` is used.
+      :arg list,tuple,float border_color:  This parameter **only has an effect** if `richtext=True`. Otherwise, ``text_color`` is used.
       
-      :arg float border_width: the width of border and ``callout`` lines. Default is 0 (no border), in which case callout lines may still appear with some hairline width, depending on the PDF viewer used.
+      :arg float border_width: the width of border and ``callout`` lines. Default is 0 (no border), in which case callout lines may still appear with some hairline width, depending on the PDF viewer used. In any case, this value must be positive to see a border line.
       
       :arg list,tuple dashes: a list of floats specifying how border and callout lines should be dashed. Default is ``None``.
       
@@ -231,7 +232,7 @@ In a nutshell, this is what you can do with PyMuPDF:
       
       :arg int rotate: the text orientation. Accepted values are integer multiples of 90°. Invalid entries receive a rotation of 0.
       
-      :arg bool richtext: treat ``text`` as HTML syntax. This allows to achieve **bold**, *italic*, arbitrary text colors, font sizes, text alignment including justify and more - as far as HTML and styling instructions support this. This is similar to what happens in :meth:`Page.insert_htmlbox`. The base library will for example pull in required fonts if it encounters characters not contained in the standard ones. Some parameters are ignored if this option is set, as mentioned above. Default is ``False``.
+      :arg bool richtext: treat ``text`` as HTML syntax. This allows to achieve **bold**, *italic*, arbitrary text colors, font sizes, text alignment including justify and more - as far as the PDF subset of HTML and styling instructions supports this. This is similar to what happens in :meth:`Page.insert_htmlbox`. The base library will for example pull in required fonts if it encounters characters not contained in the standard ones. Some parameters are ignored if this option is set, as mentioned above. Default is ``False``.
       
       :arg str style: supply optional HTML styling information in CSS syntax. Ignored if `richtext=False`.
 
@@ -300,30 +301,17 @@ In a nutshell, this is what you can do with PyMuPDF:
 
    .. method:: add_redact_annot(quad, text=None, fontname=None, fontsize=11, align=TEXT_ALIGN_LEFT, fill=(1, 1, 1), text_color=(0, 0, 0), cross_out=True)
       
-      **PDF only**: Add a redaction annotation. A redaction annotation identifies content to be removed from the document. Adding such an annotation is the first of two steps. It makes visible what will be removed in the subsequent step, :meth:`Page.apply_redactions`.
+      **PDF only**: Add a redaction annotation. A redaction annotation identifies an area whose content should be removed from the document. Adding such an annotation is the first of two steps. It makes visible what will be removed in the subsequent step, :meth:`Page.apply_redactions`.
 
       :arg quad_like,rect_like quad: specifies the (rectangular) area to be removed which is always equal to the annotation rectangle. This may be a :data:`rect_like` or :data:`quad_like` object. If a quad is specified, then the enveloping rectangle is taken.
 
       :arg str text: text to be placed in the rectangle after applying the redaction (and thus removing old content). (New in v1.16.12)
 
-      :arg str fontname: the font to use when *text* is given, otherwise ignored. The same rules apply as for :meth:`Page.insert_textbox` -- which is the method :meth:`Page.apply_redactions` internally invokes. The replacement text will be **vertically centered**, if this is one of the CJK or :ref:`Base-14-Fonts`. (New in v1.16.12)
-
-         .. note::
-
-            * For an **existing** font of the page, use its reference name as *fontname* (this is *item[4]* of its entry in :meth:`Page.get_fonts`).
-            * For a **new, non-builtin** font, proceed as follows::
-
-               page.insert_text(point,  # anywhere, but outside all redaction rectangles
-                   "something",  # some non-empty string
-                   fontname="newname",  # new, unused reference name
-                   fontfile="...",  # desired font file
-                   render_mode=3,  # makes the text invisible
-               )
-               page.add_redact_annot(..., fontname="newname")
+      :arg str fontname: the font to use when ``text`` is given, otherwise ignored. Only CJK and the :ref:`Base-14-Fonts` are supported. Apart from this, the same rules apply as for :meth:`Page.insert_textbox` -- which is what the method :meth:`Page.apply_redactions` internally invokes. 
 
       :arg float fontsize: the :data:`fontsize` to use for the replacing text. If the text is too large to fit, several insertion attempts will be made, gradually reducing the :data:`fontsize` to no less than 4. If then the text will still not fit, no text insertion will take place at all. (New in v1.16.12)
 
-      :arg int align: the horizontal alignment for the replacing text. See :meth:`insert_textbox` for available values. The vertical alignment is (approximately) centered if a PDF built-in font is used (CJK or :ref:`Base-14-Fonts`). (New in v1.16.12)
+      :arg int align: the horizontal alignment for the replacing text. See :meth:`insert_textbox` for available values. The vertical alignment is (approximately) centered.
 
       :arg sequence fill: the fill color of the rectangle **after applying** the redaction. The default is *white = (1, 1, 1)*, which is also taken if ``None`` is specified. To suppress a fill color altogether, specify ``False``. In this cases the rectangle remains transparent. (New in v1.16.12)
 
@@ -451,7 +439,7 @@ In a nutshell, this is what you can do with PyMuPDF:
       .. image:: images/img-markers.*
          :scale: 100
 
-   .. method:: cluster_drawings(clip=None, drawings=None, x_tolerance=3, y_tolerance=3)
+   .. method:: cluster_drawings(clip=None, drawings=None, x_tolerance=3, y_tolerance=3, final_filter=True)
 
       Cluster vector graphics (synonyms are line-art or drawings) based on their geometrical vicinity. The method walks through the output of :meth:`Page.get_drawings` and joins paths whose `path["rect"]` are closer to each other than some tolerance values (given in the arguments). The result is a list of rectangles that each wrap things like tables (with gridlines), pie charts, bar charts, etc.
 
@@ -459,9 +447,11 @@ In a nutshell, this is what you can do with PyMuPDF:
 
       :arg list drawings: (optional) provide a previously generated output of :meth:`Page.get_drawings`. If `None` the method will execute the method.
 
-      :arg float x_tolerance: 
+      :arg float x_tolerance / y_tolerance: Assume vector graphics to be close enough neighbors for belonging to the same rectangle. Default is 3 points.
 
-   .. method:: find_tables(clip=None, strategy=None, vertical_strategy=None, horizontal_strategy=None, vertical_lines=None, horizontal_lines=None, snap_tolerance=None, snap_x_tolerance=None, snap_y_tolerance=None, join_tolerance=None, join_x_tolerance=None, join_y_tolerance=None, edge_min_length=3, min_words_vertical=3, min_words_horizontal=1, intersection_tolerance=None, intersection_x_tolerance=None, intersection_y_tolerance=None, text_tolerance=None, text_x_tolerance=None, text_y_tolerance=None, add_lines=None)
+      :arg bool final_filter: If `True` (default), the method will to remove rectangles having width or height smaller than the respective tolerance value. If `False` no such filtering is done.
+
+   .. method:: find_tables(clip=None, strategy=None, vertical_strategy=None, horizontal_strategy=None, vertical_lines=None, horizontal_lines=None, snap_tolerance=None, snap_x_tolerance=None, snap_y_tolerance=None, join_tolerance=None, join_x_tolerance=None, join_y_tolerance=None, edge_min_length=3, min_words_vertical=3, min_words_horizontal=1, intersection_tolerance=None, intersection_x_tolerance=None, intersection_y_tolerance=None, text_tolerance=None, text_x_tolerance=None, text_y_tolerance=None, add_lines=None, add_boxes=None, paths=None)
 
       Find tables on the page and return an object with related information. Typically, the default values of the many parameters will be sufficient. Adjustments should ever only be needed in corner case situations.
 
@@ -495,7 +485,11 @@ In a nutshell, this is what you can do with PyMuPDF:
 
       :arg float text_tolerance: Characters will be combined into words only if their distance is no larger than this value (points). Default is 3. Instead of this value, separate values can be specified for the dimensions using `text_x_tolerance` and `text_y_tolerance`.
 
-      :arg tuple,list add_lines: Specify a list of "lines" (i.e. pairs of :data:`point_like` objects) as **additional**, "virtual" vector graphics. These lines may help with table and / or cell detection and will not otherwise influence the detection strategy. Especially, in contrast to parameters `horizontal_lines` and `vertical_lines`, they will not prevent detecting rows or columns in other ways. These lines will be treated exactly like "real" vector graphics in terms of joining, snapping, intersectiing, minimum length and containment in the `clip` rectangle. Similarly, lines not parallel to any of the coordinate axes will be ignored.
+      :arg tuple,list add_lines: Specify a list of "lines" (i.e. pairs of :data:`point_like` objects) as **additional**, "virtual" vector graphics. These lines may help with table and / or cell detection and will not otherwise influence the detection strategy. Especially, in contrast to parameters `horizontal_lines` and `vertical_lines`, they will not prevent detecting rows or columns in other ways. These lines will be treated exactly like "real" vector graphics in terms of joining, snapping, intersecting, minimum length and containment in the `clip` rectangle. Similarly, lines not parallel to any of the coordinate axes will be ignored.
+
+      :arg tuple,list add_boxes: Specify a list of rectangles (:data:`rect_like` objects) as **additional**, "virtual" vector graphics. These rectangles may help with table and / or cell detection and will not otherwise influence the detection strategy. Especially, in contrast to parameters `horizontal_lines` and `vertical_lines`, they will not prevent detecting rows or columns in other ways. These rectangles will be treated exactly like "real" vector graphics in terms of joining, snapping, intersecting, minimum length and containment in the `clip` rectangle.
+
+      :arg list paths: list of vector graphics in the format as returned be :meth:`Page.get_drawings`. Using this parameter will prevent the method to extract vector graphics itself. This is useful if the vector graphics are already available. This can save execution time significantly.
 
       .. image:: images/img-findtables.*
 
@@ -510,7 +504,7 @@ In a nutshell, this is what you can do with PyMuPDF:
            * ``bbox``: the bounding box of the table as a tuple `(x0, y0, x1, y1)`.
            * ``cells``: bounding boxes of the table's cells (list of tuples). A cell may also be `None`.
            * ``extract()``: this method returns the text content of each table cell as a list of list of strings.
-           * ``to_markdown()``: this method returns the table as a **string in markdown format** (compatible to Github). Supporting viewers can render the string as a table. This output is optimized for **small token** sizes, which is especially beneficial for LLM/RAG feeds. Pandas DataFrames (see method `to_pandas()` below) offer an equivalent markdown table output which however is better readable for the human eye.
+           * ``to_markdown()``: this method returns the table as a **string in markdown format** (compatible to Github). Markdown viewers can render the string as a table. This output is optimized for **small token** sizes, which is especially beneficial for LLM/RAG feeds. Pandas DataFrames (see method `to_pandas()` below) offer an equivalent markdown table output which however is better readable for the human eye. Any line breaks (`\n`) in cells are replaced by HTML line breaks tags `<br>`.
            * `to_pandas()`: this method returns the table as a `pandas <https://pypi.org/project/pandas/>`_ `DataFrame <https://pandas.pydata.org/docs/reference/frame.html>`_. DataFrames are very versatile objects allowing a plethora of table manipulation methods and outputs to almost 20 well-known formats, among them Excel files, CSV, JSON, markdown-formatted tables and more. `DataFrame.to_markdown()` generates a Github-compatible markdown format optimized for human readability. This method however requires the package `tabulate <https://pypi.org/project/tabulate/>`_ to be installed in addition to pandas itself.
            * ``header``: a `TableHeader` object containing header information of the table.
            * ``col_count``: an integer containing the number of table columns.
@@ -556,23 +550,34 @@ In a nutshell, this is what you can do with PyMuPDF:
 
    .. method:: add_stamp_annot(rect, stamp=0)
 
-      PDF only: Add a "rubber stamp" like annotation to e.g. indicate the document's intended use ("DRAFT", "CONFIDENTIAL", etc.).
+      PDF only: Add a "rubber stamp" annotation to e.g. indicate the document's intended use ("DRAFT", "CONFIDENTIAL", etc.). The parameter may be either an integer to select text from a predefined array of standard texts or an image.
 
       :arg rect_like rect: rectangle where to place the annotation.
+      :arg multiple stamp: The following options are available:
+      
+         * The id number (int) of the stamp text. For available stamps see :ref:`StampIcons`.
+   
+         * A string specifying an image file path.
 
-      :arg int stamp: id number of the stamp text. For available stamps see :ref:`StampIcons`.
+         * A ``bytes``, ``bytearray`` or ``io.BytesIO`` object for an image in memory.
 
-      .. note::
+         * A :ref:`Pixmap`.
+         
+      1. **Text-based stamps**
 
-         * The stamp's text and its border line will automatically be sized and be put horizontally and vertically centered in the given rectangle. :attr:`Annot.rect` is automatically calculated to fit the given **width** and will usually be smaller than this parameter.
+         * :attr:`Annot.rect` is automatically calculated as the largest rectangle with an aspect ratio of ``width:height = 3.8`` that fits in the provided ``rect``. Its position is vertically and horizontally centered.
          * The font chosen is "Times Bold" and the text will be upper case.
-         * The appearance can be changed using :meth:`Annot.set_opacity` and by setting the "stroke" color (no "fill" color supported).
-         * This can be used to create watermark images: on a temporary PDF page create a stamp annotation with a low opacity value, make a pixmap from it with *alpha=True* (and potentially also rotate it), discard the temporary PDF page and use the pixmap with :meth:`insert_image` for your target PDF.
+         * The appearance can be modified using :meth:`Annot.set_opacity` and by setting the "stroke" color. By PDF specification, stamp annotations have no "fill" color.
 
+         .. image:: images/img-stampannot.*
 
-      .. image:: images/img-stampannot.*
-         :scale: 80
+      2. **Image-based stamps**
 
+         * The image is scaled to fit into the rectangle `rect` such that the image's center and the center of `rect` coincide. The aspect ratio of the image is preserved, so the image may not fill the entire rectangle. However, at least one of the given rectangle's width or height are fully covered.
+         * The annotation can be modified via :meth:`Annot.set_opacity`. This method therefore is a way to display images transparently even if no alpha channel is present.
+         * Setting colors has no effect on image stamps.
+         * Rotating image-based stamps **is not supported**. Setting the rotation may lead to unexpected results.
+         
    .. method:: add_widget(widget)
 
       PDF only: Add a PDF Form field ("widget") to a page. This also **turns the PDF into a Form PDF**. Because of the large amount of different options available for widgets, we have developed a new class :ref:`Widget`, which contains the possible PDF field attributes. It must be used for both, form field creation and updates.
@@ -1704,8 +1709,8 @@ In a nutshell, this is what you can do with PyMuPDF:
          height          original image height (``int``)
          cs-name         colorspace name (``str``)
          colorspace      colorspace.n (``int``)
-         xres            resolution in x-direction (``int``)
-         yres            resolution in y-direction (``int``)
+         xres            resolution in x-direction (``int``) [#f10]_
+         yres            resolution in y-direction (``int``) [#f10]_
          bpc             bits per component (``int``)
          size            storage occupied by image (``int``)
          digest          MD5 hashcode (``bytes``), if ``hashes`` is true
@@ -1917,7 +1922,7 @@ In a nutshell, this is what you can do with PyMuPDF:
 
    .. method:: load_widget(xref)
 
-      PDF only: return the field identified by *xref*.
+      PDF only: return the field identified by :data:`xref`.
 
       :arg int xref: the field's xref.
 
@@ -1948,6 +1953,14 @@ In a nutshell, this is what you can do with PyMuPDF:
 
       :arg int rotate: An integer specifying the required rotation in degrees. Must be an integer multiple of 90. Values will be converted to one of 0, 90, 180, 270.
 
+   .. method:: recolor(components=1)
+
+      PDF only: Change the colorspace components of all objects on page.
+
+      :arg int components: The desired count of color components. Must be one of 1, 3 or 4, which results in color spaces DeviceGray, DeviceRGB or DeviceCMYK respectively. The method affects text, images and vector graphics. For instance, with the default value 1, a page will be converted to grayscale. If a page is already grayscale, the method will not cause visible changes -- independent of the value of ``components``.
+
+      These changes are **permanent** and cannot be reverted.
+
    .. method:: remove_rotation()
 
       PDF only: Set page rotation to 0 while maintaining appearance and page content.
@@ -1964,11 +1977,11 @@ In a nutshell, this is what you can do with PyMuPDF:
 
    .. method:: show_pdf_page(rect, docsrc, pno=0, keep_proportion=True, overlay=True, oc=0, rotate=0, clip=None)
 
-      PDF only: Display a page of another PDF as a **vector image** (otherwise similar to :meth:`Page.insert_image`). This is a multi-purpose method. For example, you can use it to:
+      PDF only: Display a page of another PDF. This is similar to :meth:`Page.insert_image` but the source page will appear like a copy of itself and will not be rasterized. This is a multi-purpose method. For example, you can use it to:
 
       * create "n-up" versions of existing PDF files, combining several input pages into **one output page** (see example `combine.py <https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/combine-pages/combine.py>`_),
       * create "posterized" PDF files, i.e. every input page is split up in parts which each create a separate output page (see `posterize.py <https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/posterize-document/posterize.py>`_),
-      * include PDF-based vector images like company logos, watermarks, etc., see `svg-logo.py <https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/examples/svg-logo.py>`_, which puts an SVG-based logo on each page (requires additional packages to deal with SVG-to-PDF conversions).
+      * include PDF-based vector images like company logos, watermarks, etc., see `svg-logo.py <https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/examples/svg-logo.py>`_, which puts an SVG-based logo on each page.
 
       :arg rect_like rect: where to place the image on current page. Must be finite and its intersection with the page must not be empty.
       :arg docsrc: source PDF document containing the page. Must be a different document object, but may be the same file.
@@ -1985,7 +1998,7 @@ In a nutshell, this is what you can do with PyMuPDF:
 
       :arg rect_like clip: choose which part of the source page to show. Default is the full page, else must be finite and its intersection with the source page must not be empty.
 
-      .. note:: In contrast to method :meth:`Document.insert_pdf`, this method does not copy annotations, widgets or links, so these are not included in the target [#f6]_. But all its **other resources (text, images, fonts, etc.)** will be imported into the current PDF. They will therefore appear in text extractions and in :meth:`get_fonts` and :meth:`get_images` lists -- even if they are not contained in the visible area given by *clip*.
+      .. note:: In contrast to method :meth:`Document.insert_pdf`, this method does not copy annotations, widgets or links, so these objects are not included in the target [#f6]_. But all its **other resources (text, images, fonts, etc.)** will be imported into the current PDF. They will therefore appear in text extractions and in :meth:`get_fonts` and :meth:`get_images` lists -- even if they are not contained in the visible area given by *clip*.
 
       Example: Show the same source page, rotated by 90 and by -90 degrees:
 
@@ -2272,7 +2285,7 @@ Each entry of the :meth:`Page.get_links` list is a dictionary with the following
 
 * *uri*:  a string specifying the destination internet resource. Required for *LINK_URI*, else ignored. You should make sure to start this string with an unambiguous substring, that classifies the subtype of the URL, like `"http://"`, `"https://"`, `"file://"`, `"ftp://"`, `"mailto:"`, etc. Otherwise your browser will try to interpret the text and come to unwanted / unexpected conclusions about the intended URL type.
 
-* *xref*: an integer specifying the PDF :data:`xref` of the link object. Do not change this entry in any way. Required for link deletion and update, otherwise ignored. For non-PDF documents, this entry contains *-1*. It is also *-1* for **all** entries in the *get_links()* list, if **any** of the links is not supported by MuPDF - see :ref:`notes_on_supporting_links`.
+* :data:`xref`: an integer specifying the PDF :data:`xref` of the link object. Do not change this entry in any way. Required for link deletion and update, otherwise ignored. For non-PDF documents, this entry contains *-1*. It is also *-1* for **all** entries in the *get_links()* list, if **any** of the links is not supported by MuPDF - see :ref:`notes_on_supporting_links`.
 
 .. _notes_on_supporting_links:
 
@@ -2325,6 +2338,42 @@ This is an overview of homologous methods on the :ref:`Document` and on the :ref
 
 The page number "pno" is a 0-based integer `-∞ < pno < page_count`.
 
+
+.. class:: TableFinder
+
+   An object always returned by :meth:`Page.find_tables`. Attributes of interest:
+
+   ... attribute:: tables
+
+      A list of :ref:`Table` objects, each of which represents a table found on the page. Empty list if no table found.
+
+   ... attribute:: page
+
+      A reference to the :ref:`Page` object.
+
+
+.. class:: Table
+
+   An object representing a table found on the page. Attributes of interest:
+
+   .. attribute:: bbox
+
+      The bounding box of the table given as a tuple `(x0, y0, x1, y1)`. This is the rectangle that contains all cells of the table.   
+
+   
+
+   .. attribute:: cells
+
+
+
+.. class:: TableHeader
+
+.. class:: TableRow
+
+
+
+
+
 .. note::
 
    Most document methods (left column) exist for convenience reasons, and are just wrappers for: *Document[pno].<page method>*. So they **load and discard the page** on each execution.
@@ -2350,5 +2399,7 @@ The page number "pno" is a 0-based integer `-∞ < pno < page_count`.
 .. [#f8] Hyphenation detection simply means that if the last character of a line is "-", it will be assumed to be a continuation character. That character will not be found by text searching with its default flag setting. Please take note, that a MuPDF *line* may not always be what you expect: words separated by overly large gaps (e.g. caused by text justification) may constitute separate MuPDF lines. If then any of these words ends with a hyphen, it will only be found by text searching if hyphenation is switched off.
 
 .. [#f9] Objects inside the source page, like images, text or drawings, are never aware of whether their owning page now is under OC control inside the target PDF. If source page objects are OC-controlled in the source PDF, then this will not be retained on the target: they will become unconditionally visible.
+
+.. [#f10] This value is always 96, the default of the PDF interpreter. It **does not reflect** the resolution of the image itself. If you need the image's resolution, use the :meth:`Pixmap.xres` and :meth:`Pixmap.yres` attributes of the :ref:`Pixmap` created from the image binary.
 
 .. include:: footer.rst

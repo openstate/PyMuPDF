@@ -8,7 +8,9 @@ Annot
 
 |pdf_only_class|
 
-Quote from the :ref:`AdobeManual`: "An annotation associates an object such as a note, sound, or movie with a location on a page of a PDF document, or provides a way to interact with the user by means of the mouse and keyboard."
+Quote from the :ref:`AdobeManual`:
+
+   *"An annotation associates an object such as a note, sound, or movie with a location on a page of a PDF document, or provides a way to interact with the user by means of the mouse and keyboard."*
 
 There is a parent-child relationship between an annotation and its page. If the page object becomes unusable (closed document, any document structure change, etc.), then so does every of its existing annotation objects -- an exception is raised saying that the object is "orphaned", whenever an annotation property or method is accessed.
 
@@ -22,6 +24,7 @@ There is a parent-child relationship between an annotation and its page. If the 
 :meth:`Annot.get_sound`            get the sound of an audio annotation
 :meth:`Annot.get_text`             extract annotation text
 :meth:`Annot.get_textbox`          extract annotation text
+:meth:`Annot.get_textpage`         create a TextPage for the annotation
 :meth:`Annot.set_border`           set annotation's border properties
 :meth:`Annot.set_blendmode`        set annotation's blend mode
 :meth:`Annot.set_colors`           set annotation's colors
@@ -77,10 +80,10 @@ There is a parent-child relationship between an annotation and its page. If the 
 
       :arg int dpi: (new in v1.19.2) desired resolution in dots per inch. If not `None`, the matrix parameter is ignored.
 
-      :arg colorspace: a colorspace to be used for image creation. Default is *pymupdf.csRGB*.
+      :arg colorspace: a colorspace to be used for image creation. Default is ``pymupdf.csRGB``.
       :type colorspace: :ref:`Colorspace`
 
-      :arg bool alpha: whether to include transparency information. Default is *False*.
+      :arg bool alpha: whether to include transparency information. Default is ``False``.
 
       :rtype: :ref:`Pixmap`
 
@@ -88,7 +91,7 @@ There is a parent-child relationship between an annotation and its page. If the 
          
          * If the annotation has just been created or modified, you should :meth:`Document.reload_page` the page first via `page = doc.reload_page(page)`.
 
-         * The pixmap will have *"premultiplied"* pixels if `alpha=True`. To learn about some background, e.g. look for "Premultiplied alpha" `here <https://en.wikipedia.org/wiki/Glossary_of_computer_graphics#P>`_.
+         * The pixmap will have *"premultiplied"* pixels if `alpha=True`. To learn about some background, e.g. look for "Premultiplied alpha" `in this online glossary <https://en.wikipedia.org/wiki/Glossary_of_computer_graphics#P>`_.
 
 
    .. index::
@@ -134,11 +137,27 @@ There is a parent-child relationship between an annotation and its page. If the 
       :arg rect-like rect: the area to consider, defaults to :attr:`Annot.rect`.
 
 
+   .. method:: get_textpage(clip=None, flags=3)
+
+      Create a :ref:`TextPage` for the annotation.
+
+      :arg int flags: indicator bits controlling the content available for subsequent text extractions and searches -- see the parameter of :meth:`Annot.get_text`.
+
+      :arg rect-like clip: restrict extracted text to this area.
+
+      :returns: :ref:`TextPage`
+
+      |history_begin|
+
+      * v1.25.5: fixed `clip` arg.
+
+      |history_end|
+
    .. method:: set_info(info=None, content=None, title=None, creationDate=None, modDate=None, subject=None)
 
       * Changed in version 1.16.10
 
-      Changes annotation properties. These include dates, contents, subject and author (title). Changes for *name* and *id* will be ignored. The update happens selectively: To leave a property unchanged, set it to *None*. To delete existing data, use an empty string.
+      Changes annotation properties. These include dates, contents, subject and author (title). Changes for *name* and *id* will be ignored. The update happens selectively: To leave a property unchanged, set it to ``None``. To delete existing data, use an empty string.
 
       :arg dict info: a dictionary compatible with the *info* property (see below). All entries must be strings. If this argument is not a dictionary, the other arguments are used instead -- else they are ignored.
       :arg str content: *(new in v1.16.10)* see description in :attr:`info`.
@@ -153,8 +172,7 @@ There is a parent-child relationship between an annotation and its page. If the 
 
       .. note::
 
-         * While 'FreeText', 'Line', 'PolyLine', and 'Polygon' annotations can have these properties, (Py-) MuPDF does not support line ends for 'FreeText', because the call-out variant of it is not supported.
-         * *(Changed in v1.16.16)* Some symbols have an interior area (diamonds, circles, squares, etc.). By default, these areas are filled with the fill color of the annotation. If this is *None*, then white is chosen. The *fill_color* argument of :meth:`Annot.update` can now be used to override this and give line end symbols their own fill color.
+         * Some symbols have an interior area (diamonds, circles, squares, etc.). These areas are filled with the fill color or the stroke color, depending on the annotation type.
 
       :arg int start: The symbol number for the first point.
       :arg int end: The symbol number for the last point.
@@ -221,7 +239,7 @@ There is a parent-child relationship between an annotation and its page. If the 
       The annotation's blend mode. See :ref:`AdobeManual`, page 324 for explanations.
 
       :rtype: str
-      :returns: the blend mode or *None*.
+      :returns: the blend mode or ``None``.
 
 
    .. method:: set_blendmode(blendmode)
@@ -288,15 +306,13 @@ There is a parent-child relationship between an annotation and its page. If the 
 
    .. method:: set_colors(colors=None, stroke=None, fill=None)
 
-      * Changed in version 1.16.9: Allow colors to be directly set. These parameters are used if *colors* is not a dictionary.
-
-      Changes the "stroke" and "fill" colors for supported annotation types -- not all annotations accept both.
+      Changes the "stroke" and "fill" colors for supported annotation types -- not all annotation types accept both. **Do not use this method at all for FreeText annotations** because it has its special conventions to deal with up to three colors (border, fill, text).
 
       :arg dict colors: a dictionary containing color specifications. For accepted dictionary keys and values see below. The most practical way should be to first make a copy of the *colors* property and then modify this dictionary as required.
       :arg sequence stroke: see above.
       :arg sequence fill: see above.
 
-      *Changed in v1.18.5:* To completely remove a color specification, use an empty sequence like `[]`. If you specify `None`, an existing specification will not be changed.
+      To completely remove a color specification, use an empty sequence like `[]`. If you specify `None`, an existing specification will not be changed.
 
 
    .. method:: delete_responses()
@@ -332,20 +348,26 @@ There is a parent-child relationship between an annotation and its page. If the 
       Color specifications may be made in the usual format used in PuMuPDF as sequences of floats ranging from 0.0 to 1.0 (including both). The sequence length must be 1, 3 or 4 (supporting GRAY, RGB and CMYK colorspaces respectively). For GRAY, just a float is also acceptable.
 
       :arg float opacity: *(new in v1.16.14)* **valid for all annotation types:** change or set the annotation's transparency. Valid values are *0 <= opacity < 1*.
+
       :arg str blend_mode: *(new in v1.16.14)* **valid for all annotation types:** change or set the annotation's blend mode. For valid values see :ref:`BlendModes`.
+
       :arg float fontsize: change :data:`fontsize` of the text. 'FreeText' annotations only.
-      :arg sequence,float text_color: change the text color. 'FreeText' annotations only.
-      :arg sequence,float border_color: change the border color. 'FreeText' annotations only.
+
+      :arg sequence,float text_color: change the text color. 'FreeText' annotations only. This has the same effect as ``border_color``. Note that the text color of rich-text annotations cannot be changed at all because it is set by HTML / CSS syntax and part of the text itself.
+
+      :arg sequence,float border_color: change the border color. 'FreeText' annotations only. This has the same effect as ``text_color``.
+
       :arg sequence,float fill_color: the fill color.
 
-          * 'Line', 'Polyline', 'Polygon' annotations: use it to give applicable line end symbols a fill color other than that of the annotation *(changed in v1.16.16)*.
+      :arg bool cross_out: *(new in v1.17.2)* add two diagonal lines to the annotation rectangle. 'Redact' annotations only. If not desired, ``False`` must be specified even if the annotation was created with ``False``.
 
-      :arg bool cross_out: *(new in v1.17.2)* add two diagonal lines to the annotation rectangle. 'Redact' annotations only. If not desired, *False* must be specified even if the annotation was created with *False*.
       :arg int rotate: new rotation value. Default (-1) means no change. Supports 'FreeText' and several other annotation types (see :meth:`Annot.set_rotation`), [#f1]_. Only choose 0, 90, 180, or 270 degrees for 'FreeText'. Otherwise any integer is acceptable.
 
       :rtype: bool
 
-      .. note:: Using this method inside a :meth:`Page.annots` loop is **not recommended!** This is because most annotation updates require the owning page to be reloaded -- which cannot be done inside this loop. Please use the example coding pattern given in the documentation of this generator.
+      This method is the only way to change the colors of a FreeText annotation. You cannot use :meth:`Annot.set_colors` for this purpose. But be aware that for rich-text annotations, the text color is never changed. The text color is set by the ``text_color`` entry of the ``info`` dictionary. This is a limitation of |MuPDF| and not a bug.
+
+      .. caution:: Using this method inside a :meth:`Page.annots` loop is **not recommended!** This is because most annotation updates require the owning page to be reloaded -- which cannot be done inside this loop. Please use the example coding pattern given in the documentation of this generator.
 
 
    .. attribute:: file_info
@@ -353,7 +375,7 @@ There is a parent-child relationship between an annotation and its page. If the 
       Basic information of the annot's attached file.
 
       :rtype: dict
-      :returns: a dictionary with keys *filename*, *ufilename*, *desc* (description), *size* (uncompressed file size), *length* (compressed length) for FileAttachment annot types, else *None*.
+      :returns: a dictionary with keys *filename*, *ufilename*, *desc* (description), *size* (uncompressed file size), *length* (compressed length) for FileAttachment annot types, else ``None``.
 
    .. method:: get_file()
 
@@ -464,7 +486,7 @@ There is a parent-child relationship between an annotation and its page. If the 
 
    .. attribute:: line_ends
 
-      A pair of integers specifying start and end symbol of annotations types 'FreeText', 'Line', 'PolyLine', and 'Polygon'. *None* if not applicable. For possible values and descriptions in this list, see the :ref:`AdobeManual`, table 1.76 on page 400.
+      A pair of integers specifying start and end symbol of annotations types 'FreeText', 'Line', 'PolyLine', and 'Polygon'. ``None`` if not applicable. For possible values and descriptions in this list, see the :ref:`AdobeManual`, table 1.76 on page 400.
 
       :rtype: tuple
 
@@ -483,7 +505,10 @@ There is a parent-child relationship between an annotation and its page. If the 
 
    .. attribute:: colors
 
-      dictionary of two lists of floats in range *0 <= float <= 1* specifying the "stroke" and the interior ("fill") colors. The stroke color is used for borders and everything that is actively painted or written ("stroked"). The fill color is used for the interior of objects like line ends, circles and squares. The lengths of these lists implicitly determine the colorspaces used: 1 = GRAY, 3 = RGB, 4 = CMYK. So "[1.0, 0.0, 0.0]" stands for RGB color red. Both lists can be empty if no color is specified.
+      dictionary of two lists of floats in range *0 <= float <= 1* specifying the "stroke" and the interior ("fill") colors. The stroke color is used for borders and everything that is actively painted or written ("stroked"). The fill color is used for the interior of objects like line ends, circles and squares. The lengths of these lists implicitly determine the colorspaces used: 1 = GRAY, 3 = RGB, 4 = CMYK. So "[1.0, 0.0, 0.0]" stands for RGB color red. Both lists can be empty if no color is specified. Be aware about some potentially unexpected cases:
+
+      * The color of Highlight annotations is a **stroke** color, contrary to intuition.
+      * The color if FreeText annotations is a **stroke** color, but appears as the color that fills the rectangle and any applicable line end symbols. Text color and border color cannot be accessed at all.
 
       :rtype: dict
 

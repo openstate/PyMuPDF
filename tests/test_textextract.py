@@ -197,7 +197,7 @@ def test_2954():
     text_none, n_fffd_none = get()
     text_0, n_fffd_0 = get(flags0)
     
-    text_1, n_fffd_1 = get(flags0 | pymupdf.TEXT_CID_FOR_UNKNOWN_UNICODE)
+    text_1, n_fffd_1 = get(flags0 | pymupdf.TEXT_USE_CID_FOR_UNKNOWN_UNICODE)
 
     assert n_fffd_none == n_fffd_good
     assert n_fffd_0 == n_fffd_bad
@@ -309,6 +309,17 @@ def test_document_text():
         pymupdf._log_items_clear()
 
 
+def test_4524():
+    path = os.path.abspath(f'{__file__}/../../tests/resources/mupdf_explored.pdf')
+    print('')
+    document = pymupdf.Document(path)
+    texts_single = pymupdf.get_text(path, method='single', pages=[1, 3, 5])
+    texts_mp = pymupdf.get_text(path, method='mp', pages=[1, 3, 5])
+    print(f'{len(texts_single)=}')
+    print(f'{len(texts_mp)=}')
+    assert texts_mp == texts_single
+
+
 def test_3594():
     verbose = 0
     print()
@@ -320,10 +331,6 @@ def test_3594():
             for line in text.split('\n'):
                 print(f'    {line!r}')
             print('='*40)
-    if pymupdf.mupdf_version_tuple < (1, 24, 3):
-        # We expect MuPDF warnings.
-        wt = pymupdf.TOOLS.mupdf_warnings()
-        assert wt
 
 
 def test_3687():
@@ -388,10 +395,7 @@ def test_4026():
         blocks = page.get_text('blocks')
         for i, block in enumerate(blocks):
             print(f'block {i}: {block}')
-        if pymupdf.mupdf_version_tuple < (1, 25):
-            assert len(blocks) == 15
-        else:
-            assert len(blocks) == 5
+        assert len(blocks) == 5
 
 def test_3725():
     # This currently just shows the extracted text. We don't check it is as expected.
@@ -441,7 +445,7 @@ def test_4139():
     flags = (0
             | pymupdf.TEXT_PRESERVE_IMAGES
             | pymupdf.TEXT_PRESERVE_WHITESPACE
-            | pymupdf.TEXT_CID_FOR_UNKNOWN_UNICODE
+            | pymupdf.TEXT_USE_CID_FOR_UNKNOWN_UNICODE
             )
     with pymupdf.open(path) as document:
         page = document[0]
@@ -455,10 +459,7 @@ def test_4139():
                         seen.add(color)
                         print(f"B{b_ctr}.L{l_ctr}.S{s_ctr}: {color=} {hex(color)=} {s=}")
                         assert color == 0, f'{s=}'
-                        if pymupdf.mupdf_version_tuple >= (1, 25):
-                            assert s['alpha'] == 255
-                        else:
-                            assert not 'alpha' in s
+                        assert s['alpha'] == 255
 
 
 def test_4245():
@@ -790,3 +791,35 @@ def test_extendable_textpage():
         
         path3 = os.path.normpath(f'{__file__}/../../tests/test_extendable_textpage3.pdf')
         document.save(path3)
+
+
+def test_4363():
+    print()
+    print(f'{pymupdf.version=}')
+    path = os.path.normpath(f'{__file__}/../../tests/resources/test_4363.pdf')
+    n = 0
+    texts = list()
+    with pymupdf.open(path) as document:
+        assert len(document) == 1
+        page = document[0]
+        t = page.search_for('tour')
+        print(f'{t=}')
+        n += len(t)
+        text = page.get_text()
+        texts.append(text)
+    print(f'{n=}')
+    print(f'{len(texts)=}')
+    text = texts[0]
+    print('text:')
+    print(f'{text=}')
+    text_expected = (
+            'Deal Roadshow SiteTour\n'
+            'We know your process. We know your standard.\n'
+            'Professional Site Tour Video Productions for the Capital Markets.\n'
+            '1\n'
+            )
+    if text != text_expected:
+        print(f'Expected:\n    {text_expected!r}')
+        print(f'Found:\n    {text!r}')
+        assert 0
+    

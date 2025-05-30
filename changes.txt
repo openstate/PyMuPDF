@@ -2,7 +2,58 @@ Change Log
 ==========
 
 
+**Changes in version 1.26.0 (2025-05-22)**
+
+* Use MuPDF-1.26.1.
+
+* Fixed issues:
+
+  * **Fixed** `4324 <https://github.com/pymupdf/PyMuPDF/issues/4324>`_: cluster_drawings() fails to cluster horizontal and vertical thin lines
+  * **Fixed** `4363 <https://github.com/pymupdf/PyMuPDF/issues/4363>`_: Trouble with searching
+  * **Fixed** `4404 <https://github.com/pymupdf/PyMuPDF/issues/4404>`_: IndexError in page.get_links()
+  * **Fixed** `4412 <https://github.com/pymupdf/PyMuPDF/issues/4412>`_: Regression? Spurious error? in insert_pdf in v1.25.4
+  * **Fixed** `4423 <https://github.com/pymupdf/PyMuPDF/issues/4423>`_: pymupdf.mupdf.FzErrorFormat: code=7: cannot find object in xref error encountered after version 1.25.3
+  * **Fixed** `4435 <https://github.com/pymupdf/PyMuPDF/issues/4435>`_: get_pixmap method stuck on one page
+  * **Fixed** `4439 <https://github.com/pymupdf/PyMuPDF/issues/4439>`_: New Xml class from data does not work - bug in code
+  * **Fixed** `4445 <https://github.com/pymupdf/PyMuPDF/issues/4445>`_: Broken XREF table incorrectly repaired
+  * **Fixed** `4447 <https://github.com/pymupdf/PyMuPDF/issues/4447>`_: Stroke color of annotations cannot be correctly set
+  * **Fixed** `4479 <https://github.com/pymupdf/PyMuPDF/issues/4479>`_: set_layer_ui_config() toggles all layers rather than just one
+  * **Fixed** `4505 <https://github.com/pymupdf/PyMuPDF/issues/4505>`_: Follow Widget flag values up its parent structure
+
+* Other:
+
+  * Partial fixed for `4457 <https://github.com/pymupdf/PyMuPDF/issues/4457>`_: Wrong characters displayed after font subsetting (w/ native method)
+  * Support image stamp annotations.
+  * Support recoloring pages.
+  * Added example of using Django's file storage API to open files with pymupdf.
+  * Clarified FreeText annotation color options.
+    We now raise an exception if an attempt is made to set attributes that can not be supported.
+  * Fixed potential segv in Pixmap.is_unicolor().
+  * Added runtime assert that that PyMuPDF and MuPDF were built with compatible
+    NDEBUG settings (related to `4390 <https://github.com/pymupdf/PyMuPDF/issues/4390>`_).
+  * Simplified handling of filename/filetype when opening documents.
+
+
+**Changes in version 1.25.5 (2025-03-31)**
+
+* Fixed issues:
+
+  * **Fixed** `4372 <https://github.com/pymupdf/PyMuPDF/issues/4372>`_: Text insertion fails due to missing /Resources object
+  * **Fixed** `4400 <https://github.com/pymupdf/PyMuPDF/issues/4400>`_: Infinite loop in fill_textbox
+  * **Fixed** `4403 <https://github.com/pymupdf/PyMuPDF/issues/4403>`_: Unable to get_text() - layer/clip nesting too deep
+  * **Fixed** `4415 <https://github.com/pymupdf/PyMuPDF/issues/4415>`_: PDF page is mirrored, origin is at bottom-left
+
+* Other:
+
+  * Use MuPDF-1.25.6.
+  * Fixed MuPDF SEGV on MacOS with particular fonts.
+  * Fixed `Annot.get_textpage()`'s `clip` arg.
+  * Fixed Python-3.14 (pre-release) build error.
+
+
 **Changes in version 1.25.4 (2025-03-14)**
+
+* Use MuPDF-1.25.5.
 
 * Fixed issues:
 

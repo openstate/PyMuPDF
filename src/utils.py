@@ -29,12 +29,21 @@ point_like = "point_like"
 rect_like = "rect_like"
 matrix_like = "matrix_like"
 quad_like = "quad_like"
+
+# ByteString is gone from typing in 3.14.
+# collections.abc.Buffer available from 3.12 only
+try:
+    ByteString = typing.ByteString
+except AttributeError:
+    # pylint: disable=unsupported-binary-operation
+    ByteString = bytes | bytearray | memoryview
+
 AnyType = typing.Any
 OptInt = typing.Union[int, None]
 OptFloat = typing.Optional[float]
 OptStr = typing.Optional[str]
 OptDict = typing.Optional[dict]
-OptBytes = typing.Optional[typing.ByteString]
+OptBytes = typing.Optional[ByteString]
 OptSeq = typing.Optional[typing.Sequence]
 
 """
@@ -97,7 +106,7 @@ def write_text(
 def show_pdf_page(
         page,
         rect,
-        src,
+        docsrc,
         pno=0,
         keep_proportion=True,
         overlay=True,
@@ -105,11 +114,11 @@ def show_pdf_page(
         rotate=0,
         clip=None,
         ) -> int:
-    """Show page number 'pno' of PDF 'src' in rectangle 'rect'.
+    """Show page number 'pno' of PDF 'docsrc' in rectangle 'rect'.
 
     Args:
         rect: (rect-like) where to place the source image
-        src: (document) source PDF
+        docsrc: (document) source PDF
         pno: (int) source page number
         keep_proportion: (bool) do not change width-height-ratio
         overlay: (bool) put in foreground
@@ -156,17 +165,15 @@ def show_pdf_page(
     pymupdf.CheckParent(page)
     doc = page.parent
 
-    if not doc.is_pdf or not src.is_pdf:
+    if not doc.is_pdf or not docsrc.is_pdf:
         raise ValueError("is no PDF")
 
     if rect.is_empty or rect.is_infinite:
         raise ValueError("rect must be finite and not empty")
 
     while pno < 0:  # support negative page numbers
-        pno += src.page_count
-    src_page = src[pno]  # load source page
-    if src_page.get_contents() == []:
-        raise ValueError("nothing to show - source page empty")
+        pno += docsrc.page_count
+    src_page = docsrc[pno]  # load source page
 
     tar_rect = rect * ~page.transformation_matrix  # target rect in PDF coordinates
 
@@ -190,7 +197,7 @@ def show_pdf_page(
         i += 1
         _imgname = n + str(i)
 
-    isrc = src._graft_id  # used as key for graftmaps
+    isrc = docsrc._graft_id  # used as key for graftmaps
     if doc._graft_id == isrc:
         raise ValueError("source document must not equal target")
 
@@ -201,7 +208,7 @@ def show_pdf_page(
         doc.Graftmaps[isrc] = gmap
 
     # take note of generated xref for automatic reuse
-    pno_id = (isrc, pno)  # id of src[pno]
+    pno_id = (isrc, pno)  # id of docsrc[pno]
     xref = doc.ShownPages.get(pno_id, 0)
 
     if overlay:
@@ -1913,7 +1920,7 @@ def do_widgets(
 
     # remove "P" owning page reference from all widgets of all source pages
     for i in src_range:
-        src_page = src[src_range[i]]
+        src_page = src[i]
         for xref in [
             xref
             for xref, wtype, _ in src_page.annot_xrefs()
@@ -1942,7 +1949,7 @@ def do_widgets(
         parents[xref]["new_xref"] = parent_xref_new
         parents[xref]["new_kids"] = kids_xrefs_new
 
-    for i in src_range:
+    for i in range(len(src_range)):
         # read first copied over page in target
         tar_page = tar[start_at + i]
 
@@ -4601,12 +4608,12 @@ def fill_textbox(
         words = line.split(" ")  # the words in the line
 
         # cut in parts any words that are longer than rect width
-        words, word_lengths = norm_words(std_width, words)
+        words, word_lengths = norm_words(width, words)
 
         n = len(words)
         while True:
             line0 = " ".join(words[:n])
-            wl = sum(word_lengths[:n]) + space_len * (len(word_lengths[:n]) - 1)
+            wl = sum(word_lengths[:n]) + space_len * (n - 1)
             if wl <= width:
                 new_lines.append((line0, wl))
                 words = words[n:]
@@ -4618,6 +4625,7 @@ def fill_textbox(
 
             if len(words) == 0:
                 break
+            assert n
 
     # -------------------------------------------------------------------------
     # List of lines created. Each item is (text, tl), where 'tl' is the PDF
