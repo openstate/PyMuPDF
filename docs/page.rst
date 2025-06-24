@@ -504,7 +504,7 @@ In a nutshell, this is what you can do with PyMuPDF:
            * ``bbox``: the bounding box of the table as a tuple `(x0, y0, x1, y1)`.
            * ``cells``: bounding boxes of the table's cells (list of tuples). A cell may also be `None`.
            * ``extract()``: this method returns the text content of each table cell as a list of list of strings.
-           * ``to_markdown()``: this method returns the table as a **string in markdown format** (compatible to Github). Markdown viewers can render the string as a table. This output is optimized for **small token** sizes, which is especially beneficial for LLM/RAG feeds. Pandas DataFrames (see method `to_pandas()` below) offer an equivalent markdown table output which however is better readable for the human eye. Any line breaks (`\n`) in cells are replaced by HTML line breaks tags `<br>`.
+           * ``to_markdown()``: this method returns the table as a **string in markdown format** (compatible to Github). Markdown viewers can render the string as a table. This output is optimized for **small token** sizes, which is especially beneficial for LLM/RAG feeds. Pandas DataFrames (see method `to_pandas()` below) offer an equivalent markdown table output which however is better readable for the human eye. Any line breaks (``\n``) in cells are replaced by HTML line breaks tags `<br>`.
            * `to_pandas()`: this method returns the table as a `pandas <https://pypi.org/project/pandas/>`_ `DataFrame <https://pandas.pydata.org/docs/reference/frame.html>`_. DataFrames are very versatile objects allowing a plethora of table manipulation methods and outputs to almost 20 well-known formats, among them Excel files, CSV, JSON, markdown-formatted tables and more. `DataFrame.to_markdown()` generates a Github-compatible markdown format optimized for human readability. This method however requires the package `tabulate <https://pypi.org/project/tabulate/>`_ to be installed in addition to pandas itself.
            * ``header``: a `TableHeader` object containing header information of the table.
            * ``col_count``: an integer containing the number of table columns.
@@ -2329,56 +2329,171 @@ This is an overview of homologous methods on the :ref:`Document` and on the :ref
 ====================================== =====================================
 **Document Level**                     **Page Level**
 ====================================== =====================================
-*Document.get_page_fonts(pno)*         :meth:`Page.get_fonts`
-*Document.get_page_images(pno)*        :meth:`Page.get_images`
-*Document.get_page_pixmap(pno, ...)*   :meth:`Page.get_pixmap`
-*Document.get_page_text(pno, ...)*     :meth:`Page.get_text`
-*Document.search_page_for(pno, ...)*   :meth:`Page.search_for`
+:meth:`Document.get_page_fonts`        :meth:`Page.get_fonts`
+:meth:`Document.get_page_images`       :meth:`Page.get_images`
+:meth:`Document.get_page_pixmap`       :meth:`Page.get_pixmap`
+:meth:`Document.get_page_text`         :meth:`Page.get_text`
+:meth:`Document.search_page_for`       :meth:`Page.search_for`
 ====================================== =====================================
 
-The page number "pno" is a 0-based integer `-∞ < pno < page_count`.
+.. note::
+
+   Most document methods (left column) exist for convenience reasons, and are just wrappers for: *Document[pno].<page method>*. So they **load and discard the page** on each execution.
+
+   However, the first two methods work differently. They only need a page's object definition statement - the page itself will **not** be loaded. So e.g. :meth:`Page.get_fonts` is a wrapper the other way round and defined as follows: `page.get_fonts` == `page.parent.get_page_fonts(page.number)`.
+
+
+When calling the :ref:`Document` equivalent methods then the page number is sent through as a parameter, e.g.:
+
+`Document.get_page_images(pno)` or `Document.get_page_text(pno)`
+
+.. tip::
+
+   The page number parameter, ``pno``, is a 0-based integer `-∞ < pno < page_count`.
+
+
+
+
+
+Tables and Related Classes
+------------------------------------
+
+The `TableFinder` class is returned by :meth:`Page.find_tables` and has related classes as follows:
 
 
 .. class:: TableFinder
 
    An object always returned by :meth:`Page.find_tables`. Attributes of interest:
 
-   ... attribute:: tables
+   .. attribute:: tables
 
-      A list of :ref:`Table` objects, each of which represents a table found on the page. Empty list if no table found.
+      A list of :class:`Table` objects, each of which represents a table found on the page. An empty list if no tables are found.
 
-   ... attribute:: page
+   .. attribute:: page
 
       A reference to the :ref:`Page` object.
+
+      :type: :ref:`Page`
 
 
 .. class:: Table
 
-   An object representing a table found on the page. Attributes of interest:
+   An object representing a table found on the page.
+
+
+   .. attribute:: page
+
+      A back-reference to the owning page.
+
+      :type: :ref:`Page`
+
+   .. attribute:: cells
+
+      An array of `Rect` objects for each cell in the table.
+
+      :type: list
+
+
+   .. attribute:: header
+
+      A `TableHeader` object.
+
+      :type: `TableHeader`
+
 
    .. attribute:: bbox
 
-      The bounding box of the table given as a tuple `(x0, y0, x1, y1)`. This is the rectangle that contains all cells of the table.   
+      The bounding box of all cells of the table header.
 
-   
 
-   .. attribute:: cells
+      :type: :ref:`Rect`
+
+
+
+   .. attribute:: row_count
+
+      Number of rows in the table.
+
+      :type: int
+
+
+   .. attribute:: col_count
+
+      Number of columns in the table.
+
+      :type: int
+
+
+   .. attribute:: rows
+
+      An array of `TableRow` objects for each row in the table.
+
+      :type: list
+
+
+   .. method:: extract()
+
+      Extracts table cell text data into a list.
+
+      :type: list
+
+   .. method:: to_markdown(clean=False, fill_empty=True)
+
+      Extracts table data into Markdown text format.
+
+
+      :arg bool clean: If ``True`` then markdown syntax is removed from cell content.
+      :arg bool fill_empty: If ``True`` then cell content `None` is replaced by the values above (columns) or left (rows) in an effort to approximate row and columns spans.
+
+
+      :type: string
+
+
+   .. method:: to_pandas()
+
+      Return a `pandas DataFrame <https://pypi.org/project/pandas/>`_ `DataFrame <https://pandas.pydata.org/docs/reference/frame.html>`_ version of the table.
+
+      :type: pandas DataFrame
 
 
 
 .. class:: TableHeader
 
+
+   Dedicated class for table headers.
+
+   .. attribute:: bbox
+
+      The bounding box of the union of cells belonging to the table header, given as a tuple (x0, y0, x1, y1). This rectangle contains all table header cells.
+
+      :type: :ref:`Rect`
+
+   .. attribute:: cells
+
+      A list of tuples for each bbox of a column header.
+
+      :type: list
+
+   .. attribute:: names
+
+      A list of strings with column header text.
+
+      :type: list
+
+   .. attribute:: external
+
+      A boolean indicating whether the header is outside the table cells.
+
+      :type: `bool`
+
+
 .. class:: TableRow
 
+   Dedicated class for table rows.
 
 
+----
 
-
-.. note::
-
-   Most document methods (left column) exist for convenience reasons, and are just wrappers for: *Document[pno].<page method>*. So they **load and discard the page** on each execution.
-
-   However, the first two methods work differently. They only need a page's object definition statement - the page itself will **not** be loaded. So e.g. :meth:`Page.get_fonts` is a wrapper the other way round and defined as follows: *page.get_fonts == page.parent.get_page_fonts(page.number)*.
 
 .. rubric:: Footnotes
 

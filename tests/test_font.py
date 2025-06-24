@@ -68,7 +68,12 @@ def test_2608():
         with open(os.path.abspath(f'{__file__}/../../tests/test_2608_out'), 'wb') as f:
             f.write(text.encode('utf8'))
         path_expected = os.path.normpath(f'{__file__}/../../tests/resources/test_2608_expected')
-        with open(path_expected, 'rb') as f:
+        path_expected_1_26 = os.path.normpath(f'{__file__}/../../tests/resources/test_2608_expected_1.26')
+        if pymupdf.mupdf_version_tuple >= (1, 27):
+            path_expected2 = path_expected
+        else:
+            path_expected2 = path_expected_1_26
+        with open(path_expected2, 'rb') as f:
             expected = f.read().decode('utf8')
         # Github windows x32 seems to insert \r characters; maybe something to
         # do with the Python installation's line endings settings.
@@ -228,8 +233,8 @@ def test_3887():
 def test_4457():
     print()
     files = (
-            ('https://arxiv.org/pdf/2504.13180', 'test_4457_a.pdf', None, 4),
-            ('https://arxiv.org/pdf/2504.13181', 'test_4457_b.pdf', None, 9),
+            ('https://github.com/user-attachments/files/20862923/test_4457_a.pdf', 'test_4457_a.pdf', None, 4),
+            ('https://github.com/user-attachments/files/20862922/test_4457_b.pdf', 'test_4457_b.pdf', None, 9),
             )
     for url, name, size, rms_after_max in files:
         path = util.download(url, name, size)
